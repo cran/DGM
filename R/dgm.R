@@ -367,12 +367,6 @@ subject <- function(X, id=NULL, nbf=15, delta=seq(0.5,1,0.01), cpp=TRUE,
 #' 
 #' @return store list with results.
 #' 
-#' @examples
-#' \donttest{
-#' data("utestdata")
-#' m=node(myts, 3, id="SUB001_5nodes")
-#' }
-#' 
 node <- function(X, n, id=NULL, nbf=15, delta=seq(0.5,1,0.01), cpp=TRUE, priors=priors.spec(),
                  path=getwd(), method = "exhaustive") {
   
@@ -401,16 +395,12 @@ node <- function(X, n, id=NULL, nbf=15, delta=seq(0.5,1,0.01), cpp=TRUE, priors=
 #' @param path path.
 #' @param id identifier to select all subjects' nodes, e.g. pattern containing subject ID and session number.
 #' @param nodes number of nodes.
+#' @param modelStore can be set to false to save memory.
 #'
 #' @return store list with results.
 #' 
-#' @examples
-#' \donttest{
-#' read.subject(path='~/myData', id='ID00012', nodes=5)
-#' }
 #' 
-#' 
-read.subject <- function(path, id, nodes) {
+read.subject <- function(path, id, nodes, modelStore=TRUE) {
   
   models = list()
   for (n in 1:nodes) {
@@ -421,7 +411,9 @@ read.subject <- function(path, id, nodes) {
     models[[n]] = as.matrix(fread(file.path(path,file))) # faster, from package "data.table"
   }
   store=list()
-  store$models=models
+  if (modelStore) {
+    store$models=models
+  }
   store$winner=getWinner(models,nodes)
   store$adj=getAdjacency(store$winner,nodes)
   
@@ -663,7 +655,7 @@ corTs <- function(ts) {
   return(M)
 }
 
-#' Get specific parent model from all models.
+#' Extract specific parent model with assocated df and ME from complete model space.
 #'
 #' @param models a 2D model matrix.
 #' @param parents a vector with parent nodes.
@@ -686,6 +678,27 @@ getModel <- function(models, parents) {
     }
   }
   return(mod)
+}
+
+#' Get model number from a set of parents.
+#'
+#' @param models a 2D model matrix.
+#' @param parents a vector with parent nodes.
+#' 
+#' @return nr model number.
+getModelNr <- function(models, parents) {
+  Nn = nrow(models) + 1 # No. of nodes
+  Nm = ncol(models) # No. of models
+  
+  parents = c(parents, rep(0, Nn-length(parents)-1)) # add fill zeros
+  for (m in 1:Nm) {
+    if (all(models[,m] == parents)) {
+      nr = m
+      break;
+    }
+  }
+  
+  return(nr)
 }
 
 #' A group is a list containing restructured data from subejcts for easier group analysis.
@@ -1513,3 +1526,130 @@ diag.delta <- function(path, id, nodes) {
   return(x)
 }
 
+#' Threshold correlation matrix to match a given number of edges.
+#' @param R correlation matrix.
+#' @param n number of edges.
+
+#' @return A thresholded matrix.
+#' 
+cor2adj <- function(R, n) {
+  
+  # if uneven change to even
+  if (n %% 2) {
+    n = n + sample(c(-1,1),1)
+  }
+
+  l = length(R)
+  v=quantile(abs(R), probs = 1-n/l)
+  A = R
+  A[R < v & R > -v] = 0
+  
+  return(A)
+}
+
+#' Comparing two population proportions on the network with FDR correction.
+#' @param x1 network matrix with successes in group 1.
+#' @param n1 sample size group 1.
+#' @param x2 network matrix with successes in group 2.
+#' @param n2 sample size group 2.
+#' @param alpha alpha level for uncorrected test.
+#' @param fdr alpha level for FDR.
+#' 
+#' @return store List with test statistics and p-values.
+#' 
+prop.nettest <- function(x1, n1, x2, n2, alpha=0.05, fdr=0.05) {
+  
+  # # Verified test with example from
+  # # https://onlinecourses.science.psu.edu/stat500/node/55
+  # x1 =  52; n1 =  69
+  # x2 = 120; n2 = 131
+
+  p1 = x1/n1
+  p2 = x2/n2
+  
+  p = (x1+x2)/(n1+n2)
+  z = (p1 - p2)/sqrt(p*(1-p)*(1/n1 + 1/n2))
+  pval = 2*pnorm(-abs(z)) # get two-sided p-value
+  
+  # FDR
+  pval_fdr=array(p.adjust(pval, method = "fdr"), dim=dim(pval))
+  
+  z_fdr=z
+  z_fdr[pval_fdr>=fdr]=NA
+  
+  z_uncorr=z
+  z_uncorr[pval>=alpha]=NA
+  
+  store=list()
+  store$z=z
+  store$pval=pval
+  store$pval_fdr=pval_fdr
+  store$z_fdr=z_fdr
+  store$z_uncorr=z_uncorr
+  
+  return(store)
+}
+
+
+#' Comparing connectivity strenght of two groups with FDR correction.
+#' @param m matrix with Nn x Nn x N.
+#' @param g group assignment, vector of type factor of size N.
+#' @param fdr FDR alpha level.
+#' @param alpha alpha level for uncorrected test.
+#' @param perm optional permuation test, default is false.
+#' @param n_perm number of permutations.
+#' 
+#' @return store List with test statistics and p-values.
+#' 
+ttest.nettest <- function(m, g, alpha=0.05, fdr=0.05, perm=FALSE, n_perm=9999) {
+  
+  Nn = dim(m)[1]
+  N  = dim(m)[3]
+  
+  stat = array(NA, c(Nn, Nn))
+  pval = array(NA, c(Nn, Nn))
+  df = array(NA, c(Nn, Nn))
+  
+  for (i in 1:Nn) {
+    for  (j in 1:Nn){
+      if (!all(is.na(m[i,j,]))) { # if not NaN
+        
+        if (!perm) {
+          tmp = t.test(m[i,j,] ~ g, var.equal=TRUE)
+          stat[i,j] = tmp$statistic
+          pval[i,j] = tmp$p.value
+          df[i,j] = tmp$parameter
+          
+        } else if (perm) {
+          # using package "coin" here
+          tmp = oneway_test(m[i,j,] ~ g, distribution = approximate(B=n_perm))
+          stat[i,j] = statistic(tmp)
+          pval[i,j] = pvalue(tmp)
+        }
+        
+      }
+    }
+  }
+  
+  # FDR
+  pval_fdr = pval
+  idx = !is.na(pval)
+  pval_fdr[idx] = p.adjust(pval[idx], method = "fdr")
+  
+  stat_fdr=stat
+  stat_fdr[pval_fdr>=fdr]=NA
+  
+  stat_uncorr=stat
+  stat_uncorr[pval>=alpha]=NA
+  
+  store=list()
+  store$stat=stat
+  store$pval=pval
+  
+  store$stat_fdr=stat_fdr
+  store$pval_fdr=pval_fdr
+  
+  store$stat_uncorr=stat_uncorr
+  
+  return(store)
+}
