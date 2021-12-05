@@ -1,9 +1,9 @@
-7de756d14c5713119678935990645097 *DESCRIPTION
+2b55c294656455d5db0081fcbf35c924 *DESCRIPTION
 223c6d4b02185122e044dacce96532cc *NAMESPACE
 d91366ecd1abe24b4531b7db0b421c8a *R/RcppExports.R
 7c14af81058c2f9b4259a121bdb18758 *R/dgm-data.R
 a11d3c13d7eb7d1e4744a0b6ce4cbf17 *R/dgm.R
-538ead4c9e551813c8b0b629ec088255 *README.md
+d8a22d1195db6868b52491bea60df0be *README.md
 bdae338659fbf44358263bf00e71cd06 *data/utestdata.RData
 898cb2b42cdb02fdc061c34d2a611a9d *demo/00Index
 c2179b08319b355b49cd7d140859f1f7 *demo/example.R
@@ -50,6 +50,6 @@ ceb9ca8ff6824fdb7cda78938dc58de0 *man/symmetric.Rd
 b89e2539dc029ee45ec84cf9ce2b1ca5 *src/Makevars
 b89e2539dc029ee45ec84cf9ce2b1ca5 *src/Makevars.win
 ed94a7a14e12aa6ee8eea287b5bf8bdc *src/RcppExports.cpp
-73442040b542e058938d7205606f07c0 *src/dlmlpl.cpp
+1b9dfc8775448c19603d9c1e2d3e7a2d *src/dlmlpl.cpp
 8891f645bff15f5433d3ecb9e7ed01b0 *tests/testthat.R
 57f9fb01b62c8f6ad5f550729c33aff1 *tests/testthat/test-functions.R
